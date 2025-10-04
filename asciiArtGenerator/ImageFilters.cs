@@ -1,4 +1,5 @@
 ﻿using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
@@ -39,8 +40,9 @@ namespace asciiArtGenerator
             IntPtr scan0 = bmpData.Scan0;
             byte[] buffer = new byte[stride * bmpData.Height];
             byte[] resultBuffer = new byte[buffer.Length]; // separate buffer for results
-
             Marshal.Copy(scan0, buffer, 0, buffer.Length);
+
+            buffer.CopyTo(resultBuffer,0);
 
             int[,] gaussKernel = new int[,]
             {
@@ -123,6 +125,7 @@ namespace asciiArtGenerator
             byte[] resultBuffer = new byte[buffer.Length]; // separate buffer for results
 
             Marshal.Copy(scan0, buffer, 0, buffer.Length);
+            buffer.CopyTo(resultBuffer, 0);
 
             int[,] sobelX = new int[,]
 {
@@ -188,6 +191,115 @@ namespace asciiArtGenerator
         }
 
 
+        public static void ColorDifference(BitmapData bmpData)
+        {
+            int stride = bmpData.Stride;
+            int height = bmpData.Height;
+            int width = bmpData.Width; // make sure you have bmp.Width
+            byte[] buffer = new byte[stride * height];
+            Marshal.Copy(bmpData.Scan0, buffer, 0, buffer.Length);
 
+            byte[] resultBuffer = new byte[buffer.Length];
+
+            int bytesPerPixel = 3; // assuming 24bpp RGB
+
+            for (int y = 0; y < height - 1; y++)
+            {
+                for (int x = 0; x < width - 1; x++)
+                {
+                    int pos = y * stride + x * bytesPerPixel;
+
+                    // current pixel
+                    byte b1 = buffer[pos];
+                    byte g1 = buffer[pos + 1];
+                    byte r1 = buffer[pos + 2];
+
+                    // pixel to the right
+                    int posRight = pos + bytesPerPixel;
+                    byte b2 = buffer[posRight];
+                    byte g2 = buffer[posRight + 1];
+                    byte r2 = buffer[posRight + 2];
+
+                    // compute color differences
+                    int dR = r2 - r1;
+                    int dG = g2 - g1;
+                    int dB = b2 - b1;
+
+                    // magnitude of the color difference vector
+                    double diff = Math.Sqrt(dR * dR + dG * dG + dB * dB);
+
+                    // normalize and store as grayscale (optional)
+                    byte edge = (byte)Math.Min(255, diff);
+
+                    resultBuffer[pos] = edge;       // B
+                    resultBuffer[pos + 1] = edge;   // G
+                    resultBuffer[pos + 2] = edge;   // R
+                }
+            }
+
+            // Copy back to bitmap
+            Marshal.Copy(resultBuffer, 0, bmpData.Scan0, resultBuffer.Length);
+
+        }
+
+        public static Bitmap ResizeBitmap(Bitmap source, int width, int height)
+        {
+            var result = new Bitmap(width, height);
+            using (Graphics g = Graphics.FromImage(result))
+            {
+                g.CompositingQuality = CompositingQuality.HighQuality;
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.SmoothingMode = SmoothingMode.HighQuality;
+                g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+
+                g.DrawImage(source, 0, 0, width, height);
+            }
+            return result;
+        }
+
+
+        //public static void Erosion(BitmapData bmpData, int kernelSize = 3)
+        //{
+        //    int stride = bmpData.Stride;
+        //    int height = bmpData.Height;
+        //    int width = bmpData.Width;
+        //    int bytesPerPixel = 3;
+        //    int radius = kernelSize / 2;
+
+        //    byte[] buffer = new byte[stride * height];
+        //    byte[] result = new byte[stride * height];
+        //    Marshal.Copy(bmpData.Scan0, buffer, 0, buffer.Length);
+
+        //    for (int y = radius; y < height - radius; y++)
+        //    {
+        //        for (int x = radius; x < width - radius; x++)
+        //        {
+        //            bool keep = true;
+
+        //            for (int ky = -radius; ky <= radius && keep; ky++)
+        //            {
+        //                for (int kx = -radius; kx <= radius; kx++)
+        //                {
+        //                    int pos = ((y + ky) * stride) + ((x + kx) * bytesPerPixel);
+        //                    byte pixel = buffer[pos]; // grayscale – wystarczy 1 kanał
+
+        //                    if (pixel < 128)
+        //                    {
+        //                        keep = false;
+        //                        break;
+        //                    }
+        //                }
+        //            }
+
+        //            int posOut = y * stride + x * bytesPerPixel;
+        //            byte val = (byte)(keep ? 255 : 0);
+        //            result[posOut] = val;
+        //            result[posOut + 1] = val;
+        //            result[posOut + 2] = val;
+        //        }
+        //    }
+
+        //    Marshal.Copy(result, 0, bmpData.Scan0, result.Length);
+        //}
     }
 }
